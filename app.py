@@ -34,9 +34,9 @@ def tratar_planilha(file, numero_fatura):
     # Verifica colunas
     colunas_faltantes = [col for col in colunas_obrigatorias if col not in df_origem.columns]
     if colunas_faltantes:
-        raise ValueError(f"Cabeçalhos faltando: {', '.join(colunas_faltantes)}")
+        raise ValueError(f"Cabeçalhos faltando no arquivo '{getattr(file, 'name', 'enviado')}': {', '.join(colunas_faltantes)}")
 
-    # Estrutura Final (Adicionado CFOP)
+    # Estrutura Final
     colunas_finais = ['PARTNUMBER', 'QUANTIDADE', 'UNIDADE', 'PRECOTOTAL', 'PESOTOTAL', 'INCOTERMS', 'MOEDA', 'FATURA', 'CFOP', 'PEDIDO']
     df_final = pd.DataFrame(columns=colunas_finais)
 
@@ -75,26 +75,34 @@ st.set_page_config(page_title="Tratador de Planilhas", layout="centered")
 st.title("📂 Tratamento planilha BRY")
 
 fatura_input = st.text_input("Número da Fatura (será aplicado a todas as linhas):", placeholder="Ex: FAT12345")
-uploaded_file = st.file_uploader("Selecione o arquivo Excel de origem (.xlsx)", type=["xlsx"])
 
-if uploaded_file and fatura_input:
-    if st.button("Processar Planilha", use_container_width=True):
+# Alterado para aceitar múltiplos arquivos
+uploaded_files = st.file_uploader("Selecione os arquivos Excel de origem (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+
+if uploaded_files and fatura_input:
+    if st.button("Processar Planilhas", use_container_width=True):
         try:
             with st.spinner("Processando dados..."):
-                resultado = tratar_planilha(uploaded_file, fatura_input)
+                lista_dfs = []
+                for file in uploaded_files:
+                    df_processado = tratar_planilha(file, fatura_input)
+                    lista_dfs.append(df_processado)
+                
+                # Junta todas as planilhas em um único DataFrame com um único cabeçalho
+                resultado_final = pd.concat(lista_dfs, ignore_index=True)
                 
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    resultado.to_excel(writer, index=False, sheet_name='Planilha Tratada')
+                    resultado_final.to_excel(writer, index=False, sheet_name='Planilha Consolidada')
                 
-                st.success("Planilha processada com sucesso!")
+                st.success(f"{len(uploaded_files)} planilha(s) processada(s) e unida(s) com sucesso!")
                 st.download_button(
-                    label="📥 Clique aqui para baixar a Planilha Tratada",
+                    label="📥 Clique aqui para baixar a Planilha Consolidada",
                     data=output.getvalue(),
-                    file_name="planilha_tratada.xlsx",
+                    file_name="planilha_consolidada.xlsx",
                     use_container_width=True
                 )
         except Exception as e:
             st.error(f"Erro ao processar: {e}")
-elif uploaded_file and not fatura_input:
+elif uploaded_files and not fatura_input:
     st.warning("⚠️ Por favor, preencha o número da fatura antes de processar.")
