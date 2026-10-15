@@ -14,7 +14,23 @@ def limpar_numero(valor):
     except ValueError:
         return 0.0
 
-def tratar_planilha(file, numero_fatura):
+def extrair_fatura_do_nome(nome_arquivo):
+    """Extrai os dados antes do primeiro caractere especial ou sublinhado."""
+    # Remove a extensão do arquivo (ex: .xlsx)
+    nome_base = nome_arquivo.rsplit('.', 1)[0]
+    # Pega tudo antes do primeiro caractere não alfanumérico (ex: '_', '-', etc.)
+    match = re.search(r'^[^a-zA-Z0-9]*([a-zA-Z0-9]+)', nome_base)
+    if match:
+        # Pega a parte antes do primeiro separador (como '_')
+        fatura = re.split(r'[^a-zA-Z0-9]', nome_base)[0]
+        return fatura
+    return nome_base
+
+def tratar_planilha(file):
+    # Obtém o nome do arquivo enviado
+    nome_arquivo = getattr(file, 'name', '')
+    numero_fatura = extrair_fatura_do_nome(nome_arquivo)
+
     # Carrega a planilha de origem
     df_origem = pd.read_excel(file, header=0)
     df_origem.columns = [str(col).strip() for col in df_origem.columns]
@@ -34,7 +50,7 @@ def tratar_planilha(file, numero_fatura):
     # Verifica colunas
     colunas_faltantes = [col for col in colunas_obrigatorias if col not in df_origem.columns]
     if colunas_faltantes:
-        raise ValueError(f"Cabeçalhos faltando no arquivo '{getattr(file, 'name', 'enviado')}': {', '.join(colunas_faltantes)}")
+        raise ValueError(f"Cabeçalhos faltando no arquivo '{nome_arquivo}': {', '.join(colunas_faltantes)}")
 
     # Estrutura Final
     colunas_finais = ['PARTNUMBER', 'QUANTIDADE', 'UNIDADE', 'PRECOTOTAL', 'PESOTOTAL', 'INCOTERMS', 'MOEDA', 'FATURA', 'CFOP', 'PEDIDO']
@@ -74,18 +90,16 @@ def tratar_planilha(file, numero_fatura):
 st.set_page_config(page_title="Tratador de Planilhas", layout="centered")
 st.title("📂 Tratamento planilha BRY")
 
-fatura_input = st.text_input("Número da Fatura (será aplicado a todas as linhas):", placeholder="Ex: FAT12345")
-
-# Alterado para aceitar múltiplos arquivos
+# Uploader configurado para múltiplos arquivos
 uploaded_files = st.file_uploader("Selecione os arquivos Excel de origem (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-if uploaded_files and fatura_input:
+if uploaded_files:
     if st.button("Processar Planilhas", use_container_width=True):
         try:
             with st.spinner("Processando dados..."):
                 lista_dfs = []
                 for file in uploaded_files:
-                    df_processado = tratar_planilha(file, fatura_input)
+                    df_processado = tratar_planilha(file)
                     lista_dfs.append(df_processado)
                 
                 # Junta todas as planilhas em um único DataFrame com um único cabeçalho
@@ -104,5 +118,3 @@ if uploaded_files and fatura_input:
                 )
         except Exception as e:
             st.error(f"Erro ao processar: {e}")
-elif uploaded_files and not fatura_input:
-    st.warning("⚠️ Por favor, preencha o número da fatura antes de processar.")
